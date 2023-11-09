@@ -76,7 +76,7 @@ bool do_exec(int count, ...)
         case -1: // Error
 		perror("Fork failed!");
 		exit(errno);
-        case 0: // Child
+        case 0: ; // Child
                	int ret_exec = execv(command[0], command);
 		if(ret_exec == -1 ){
 			perror("execv failed!");
