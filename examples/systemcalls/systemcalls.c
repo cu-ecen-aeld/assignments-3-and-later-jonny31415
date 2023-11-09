@@ -1,4 +1,9 @@
 #include "systemcalls.h"
+#include <unistd.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <errno.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -17,7 +22,14 @@ bool do_system(const char *cmd)
  *   or false() if it returned a failure
 */
 
-    return true;
+    int ret = system(cmd);
+   
+    if(WIFEXITED(ret) != 0){
+    	return true;
+    }
+    else{
+	return false;
+    }
 }
 
 /**
@@ -58,10 +70,30 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
-
+    int pid = fork();
+    int status = 0;
+    switch (pid){
+        case -1: // Error
+		perror("Fork failed!");
+		exit(errno);
+        case 0: // Child
+               	int ret_exec = execv(command[0], command);
+		if(ret_exec == -1 ){
+			perror("execv failed!");
+			exit(errno);
+                }
+		exit(EXIT_SUCCESS);
+        default: // Parent
+                wait(&status);
+		if(WIFEXITED(status) && (WEXITSTATUS(status) == 0)){
+			return true;
+		}
+		else{
+			return false;
+		} 		
+    }
     va_end(args);
-
-    return true;
+    
 }
 
 /**
@@ -92,8 +124,39 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
+    int pid = fork();
+    int status;
+    int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);
 
-    va_end(args);
-
-    return true;
+    // File error
+    if(fd < 0){
+    	perror("file descriptor error");
+	return false;
+    }
+    switch (pid){
+        case -1: // Error
+                perror("Fork failed!");
+                exit(errno);
+        case 0: // Child
+		if(dup2(fd,1) < 0){
+			perror("dup2 failed!");
+			exit(errno);
+		}
+		close(fd);
+                int ret_exec = execv(command[0], command);
+                if(ret_exec == -1 ){
+                        perror("execv failed!");
+                        exit(errno);
+                }
+                exit(EXIT_SUCCESS);
+        default: // Parent
+		close(fd);
+                wait(&status);
+                if(WIFEXITED(status) && (WEXITSTATUS(status) == 0)){
+                        return true;
+                }
+                else{
+                        return false;
+                }
+    }
 }
